@@ -1,10 +1,15 @@
+// File: src/App.tsx
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import RecordPage from "./pages/RecordPage";
 import LogPage from "./pages/LogPage";
+import { Toaster } from "react-hot-toast";
 
 export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* ✅ トースト（全ページで使えるよう最上位に配置） */}
+      <Toaster position="top-right" />
+
       <header className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b">
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-3">
           <Link to="/" className="text-xl font-bold tracking-tight">トレログ MVP</Link>

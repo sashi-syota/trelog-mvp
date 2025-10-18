@@ -1,17 +1,148 @@
+// File: src/pages/LogPage.tsx
 import { useMemo, useState } from "react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import type { Session, ExerciseBlock } from "../types";
+import type { Session, ExerciseBlock, Template } from "../types";
+import toast from "react-hot-toast";
+import ChartsPanel from "../components/ChartsPanel";
 
 type GroupMode = "month" | "week";
 
+// バックアップファイルの形（将来の互換用にversion付き）
+type BackupFile = {
+  __type: "trelog-backup";
+  version: 1;
+  exportedAt: string; // ISO
+  sessions: Session[];
+  templates?: Template[];
+};
+
 export default function LogPage() {
   const [history, setHistory] = useLocalStorage<Session[]>("trelog/session/history", []);
+  const [templates, setTemplates] = useLocalStorage<Template[]>("trelog/templates/v1", []);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [mode, setMode] = useState<GroupMode>("month");
 
-  // 検索（以前の検索版を使っているなら、そのまま残してOK）
+  // 🔎 検索（既存の機能）
   const [query, setQuery] = useState("");
   const [onlyWithSets, setOnlyWithSets] = useState(false);
+
+  // ===== ここから エクスポート / インポート の実装 =====
+
+  function ymd(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function downloadJSON(filename: string, data: unknown) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // 📤 エクスポート（履歴＋テンプレを1つのJSONに同梱）
+  function exportAll() {
+    const backup: BackupFile = {
+      __type: "trelog-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      sessions: history,
+      templates,
+    };
+    downloadJSON(`trelog-backup-${ymd()}.json`, backup);
+    toast.success("バックアップ（履歴＋テンプレ）をダウンロードしました。");
+  }
+
+  // 📤 履歴のみエクスポート
+  function exportSessionsOnly() {
+    const backup: BackupFile = {
+      __type: "trelog-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      sessions: history,
+    };
+    downloadJSON(`trelog-sessions-${ymd()}.json`, backup);
+    toast.success("バックアップ（履歴のみ）をダウンロードしました。");
+  }
+
+  // 📤 テンプレのみエクスポート
+  function exportTemplatesOnly() {
+    const backup: BackupFile = {
+      __type: "trelog-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      sessions: [],
+      templates,
+    };
+    downloadJSON(`trelog-templates-${ymd()}.json`, backup);
+    toast.success("バックアップ（テンプレのみ）をダウンロードしました。");
+  }
+
+  // 📥 インポート（マージ or 置換）
+  type ImportMode = "merge" | "replace";
+  function openImport(mode: ImportMode) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = async () => {
+      try {
+        const file = input.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        const json = JSON.parse(text);
+
+        // 旧形式や別アプリのJSONにも緩やかに対応
+        let sessions: Session[] | undefined;
+        let importedTemplates: Template[] | undefined;
+
+        if (json?.__type === "trelog-backup") {
+          sessions = Array.isArray(json.sessions) ? json.sessions : [];
+          importedTemplates = Array.isArray(json.templates) ? json.templates : [];
+        } else if (Array.isArray(json?.sessions)) {
+          sessions = json.sessions;
+          importedTemplates = Array.isArray(json?.templates) ? json.templates : [];
+        } else if (Array.isArray(json)) {
+          sessions = json as Session[];
+        } else {
+          toast.error("このJSONは読み込めませんでした（形式が異なります）。");
+          return;
+        }
+
+        // 軽いスキーマチェック
+        const safeSessions = (sessions ?? []).filter((s) => typeof s?.id === "string" && typeof s?.date === "string");
+        const safeTemplates = (importedTemplates ?? []).filter((t) => typeof t?.id === "string" && typeof t?.name === "string");
+
+        if (mode === "replace") {
+          if (!confirm("現在の履歴とテンプレートを置き換えます。よろしいですか？")) return;
+          if (safeSessions.length > 0) setHistory(safeSessions);
+          if (importedTemplates) setTemplates(safeTemplates);
+        } else {
+          // merge: 既存に追加。id重複は新規側を優先しつつ重複を排除
+          const byId = new Map<string, Session>();
+          [...history, ...safeSessions].forEach((s) => byId.set(s.id, s));
+          setHistory(Array.from(byId.values()));
+
+          if (safeTemplates.length > 0) {
+            const tById = new Map<string, Template>();
+            [...templates, ...safeTemplates].forEach((t) => tById.set(t.id, t));
+            setTemplates(Array.from(tById.values()));
+          }
+        }
+
+        toast.success("インポートが完了しました。");
+      } catch (e) {
+        console.error(e);
+        toast.error("インポートに失敗しました。");
+      }
+    };
+    input.click();
+  }
+  // ===== ここまで エクスポート / インポート =====
 
   function sessionTotalVolume(s: Session) {
     return s.exercises.reduce((acc, ex) => {
@@ -25,13 +156,14 @@ export default function LogPage() {
     }, 0);
   }
 
+  // --- 週/月キー作成 ---
   function ymKey(date: string | undefined) {
     return (date ?? "").slice(0, 7) || "未設定";
   }
   function ywKey(dateStr: string | undefined) {
     if (!dateStr) return "未設定";
     const d = new Date(dateStr + "T00:00:00");
-    const day = (d.getDay() + 6) % 7;
+    const day = (d.getDay() + 6) % 7; // 月=0 … 日=6
     const monday = new Date(d);
     monday.setDate(d.getDate() - day);
     const year = monday.getFullYear();
@@ -42,6 +174,7 @@ export default function LogPage() {
     return `${year}-W${ww}`;
   }
 
+  // --- 検索対象文字列を作成 ---
   function normalize(text: unknown) {
     return (text ?? "").toString().toLowerCase();
   }
@@ -70,6 +203,7 @@ export default function LogPage() {
     return session.exercises.some((ex) => matchExercise(ex, q));
   }
 
+  // --- フィルタ＆グルーピング ---
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return history.filter((s) => {
@@ -121,7 +255,59 @@ export default function LogPage() {
         </div>
       </div>
 
-      {/* 検索バー（使っていなければ削除してOK） */}
+      {/* 🔐 バックアップ操作バー */}
+      <div className="rounded-2xl border bg-white p-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-xl border px-3 py-2 hover:bg-gray-50"
+            onClick={exportAll}
+            title="履歴とテンプレートを1つのJSONに出力"
+          >
+            エクスポート（履歴＋テンプレ）
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border px-3 py-2 hover:bg-gray-50"
+            onClick={exportSessionsOnly}
+            title="履歴のみをJSONに出力"
+          >
+            履歴のみエクスポート
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border px-3 py-2 hover:bg-gray-50"
+            onClick={exportTemplatesOnly}
+            title="テンプレートのみをJSONに出力"
+          >
+            テンプレのみエクスポート
+          </button>
+
+            <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              className="rounded-xl border px-3 py-2 hover:bg-gray-50"
+              onClick={() => openImport("merge")}
+              title="JSONから読み込んで現在のデータに追加"
+            >
+              インポート（追加）
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border px-3 py-2 hover:bg-gray-50 text-red-600"
+              onClick={() => openImport("replace")}
+              title="JSONで上書き（現在のデータは置き換え）"
+            >
+              インポート（置換）
+            </button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-gray-600">
+          JSONは“トレーニング記録（sessions）”と“テンプレート（templates）”を含むテキスト形式のバックアップです。
+        </p>
+      </div>
+
+      {/* 🔎 検索バー（既存） */}
       <div className="rounded-2xl border bg-white p-3">
         <div className="flex flex-col md:flex-row md:items-center gap-3">
           <input
@@ -156,6 +342,9 @@ export default function LogPage() {
           {filteredCount}/{totalCount} 件
         </div>
       </div>
+
+      {/* 📊 サマリーグラフ（検索バーの下に配置） */}
+      <ChartsPanel sessions={filtered} mode={mode} />
 
       {history.length === 0 && (
         <p className="text-sm text-gray-600">まだ記録がありません。「トレーニング入力」から保存してください。</p>
