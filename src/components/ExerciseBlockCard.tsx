@@ -1,7 +1,7 @@
 import { Card, Label, SectionTitle } from "./Field";
 import { SetRow } from "./SetRow";
 import type { ExerciseBlock, SetEntry } from "../types";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 function uid() {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -28,8 +28,10 @@ export function ExerciseBlockCard({
         : {
             id: uid(),
             setNumber: value.sets.length + 1,
-            weightKg: "",
+            weightKg: 100,     // デフォルト重量
+            durationSec: 60,   // デフォルト実施時間
             reps: "",
+            setsCount: 1,
             rpe: "",
             intervalSec: "",
             note: "",
@@ -49,12 +51,20 @@ export function ExerciseBlockCard({
     onChange({ ...value, sets });
   }
 
-  const totalVolume = value.sets.reduce(
-    (acc, s) =>
-      acc +
-      (typeof s.weightKg === "number" && typeof s.reps === "number" ? s.weightKg * s.reps : 0),
-    0
-  );
+  const { totalVolume, totalRPE } = useMemo(() => {
+    let vol = 0;
+    let rpeSum = 0;
+    for (const s of value.sets) {
+      const sc = typeof s.setsCount === "number" ? s.setsCount : 1;
+      if (typeof s.weightKg === "number" && typeof s.reps === "number") {
+        vol += s.weightKg * s.reps * sc;
+      }
+      if (typeof s.rpe === "number") {
+        rpeSum += s.rpe * sc;
+      }
+    }
+    return { totalVolume: vol, totalRPE: rpeSum };
+  }, [value.sets]);
 
   return (
     <Card>
@@ -184,7 +194,7 @@ export function ExerciseBlockCard({
                 <textarea
                   className="w-full rounded-xl border px-3 py-2"
                   rows={2}
-                  placeholder="この種目特有のメモを記録（ダッシュ・パワーマックスの詳細など）"
+                  placeholder="この種目特有のメモ（ダッシュ・パワーマックスの詳細など）"
                   value={value.note ?? ""}
                   onChange={(e) => onChange({ ...value, note: e.target.value })}
                 />
@@ -206,10 +216,11 @@ export function ExerciseBlockCard({
         <div className="grid grid-cols-12 gap-2 text-xs text-gray-500">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-2 text-center">重量(kg)</div>
+          <div className="col-span-2 text-center">時間(s)</div>
           <div className="col-span-2 text-center">レップ</div>
-          <div className="col-span-2 text-center">RPE</div>
+          <div className="col-span-1 text-center">セット</div>
           <div className="col-span-2 text-center">レスト(s)</div>
-          <div className="col-span-2 text-right pr-1">ボリューム</div>
+          <div className="col-span-2 text-center">RPE</div>
           <div className="col-span-12 h-px bg-gray-100" />
         </div>
 
@@ -238,8 +249,13 @@ export function ExerciseBlockCard({
         >
           ＋ 前のセットを複製
         </button>
-        <div className="ml-auto text-sm text-gray-700">
-          合計ボリューム: <span className="font-semibold">{totalVolume} kg</span>
+        <div className="ml-auto text-sm text-gray-700 flex gap-4">
+          <span>
+            合計ボリューム: <span className="font-semibold">{totalVolume} kg</span>
+          </span>
+          <span>
+            RPE: <span className="font-semibold">{totalRPE || 0}</span>
+          </span>
         </div>
       </div>
     </Card>

@@ -29,20 +29,22 @@ export function SessionForm({
     onChange({ ...value, exercises: value.exercises.map((b) => (b.id === id ? next : b)) });
   }
 
-  const sessionVolume = useMemo(
-    () =>
-      value.exercises.reduce(
-        (acc, ex) =>
-          acc +
-          ex.sets.reduce(
-            (a, s) =>
-              a + (typeof s.weightKg === "number" && typeof s.reps === "number" ? s.weightKg * s.reps : 0),
-            0
-          ),
-        0
-      ),
-    [value]
-  );
+  const { sessionVolume, sessionRPE } = useMemo(() => {
+    let vol = 0;
+    let rpeSum = 0;
+    for (const ex of value.exercises) {
+      for (const s of ex.sets) {
+        const sc = typeof s.setsCount === "number" ? s.setsCount : 1;
+        if (typeof s.weightKg === "number" && typeof s.reps === "number") {
+          vol += s.weightKg * s.reps * sc;
+        }
+        if (typeof s.rpe === "number") {
+          rpeSum += s.rpe * sc;
+        }
+      }
+    }
+    return { sessionVolume: vol, sessionRPE: rpeSum };
+  }, [value]);
 
   return (
     <form
@@ -55,7 +57,7 @@ export function SessionForm({
       <Card>
         <SectionTitle>セッション情報</SectionTitle>
 
-        {/* 上段：タイトル */}
+        {/* タイトル */}
         <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-4">
             <Label>タイトル</Label>
@@ -68,7 +70,7 @@ export function SessionForm({
             />
           </div>
 
-          {/* 中段：日付・時間・体重 */}
+          {/* 日付・時間・体重 */}
           <div>
             <Label>日付</Label>
             <input
@@ -112,13 +114,13 @@ export function SessionForm({
             />
           </div>
 
-          {/* 下段：感想・備考 */}
+          {/* 感想・備考 */}
           <div className="md:col-span-4">
             <Label>感想・備考</Label>
             <textarea
               className="w-full rounded-xl border px-3 py-2"
               rows={3}
-              placeholder="例：体調、フォームの気づき、ダッシュやパワーマックスの詳細など"
+              placeholder="例：体調、フォームの気づき、ダッシュ/パワーマックスの詳細など"
               value={value.notes ?? ""}
               onChange={(e) => onChange({ ...value, notes: e.target.value })}
             />
@@ -126,6 +128,7 @@ export function SessionForm({
         </div>
       </Card>
 
+      {/* 種目 */}
       <div className="space-y-4">
         {value.exercises.map((b) => (
           <ExerciseBlockCard
@@ -140,10 +143,16 @@ export function SessionForm({
         </button>
       </div>
 
+      {/* 合計 */}
       <Card>
         <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-700">
-            セッション合計ボリューム: <span className="font-semibold">{sessionVolume} kg</span>
+          <div className="text-sm text-gray-700 flex gap-4">
+            <span>
+              セッション合計ボリューム: <span className="font-semibold">{sessionVolume} kg</span>
+            </span>
+            <span>
+              RPE: <span className="font-semibold">{sessionRPE || 0}</span>
+            </span>
           </div>
           <div className="ml-auto flex gap-2">
             <button type="submit" className="rounded-xl bg-black text-white px-4 py-2 hover:opacity-90">
@@ -175,7 +184,7 @@ export function initialSession(): Session {
       (crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)) as string,
     title: "",
     date: `${yyyy}-${mm}-${dd}`,
-    bodyweightKg: "",
+    bodyweightKg: 85, // 既定体重
     notes: "",
     exercises: [],
   };

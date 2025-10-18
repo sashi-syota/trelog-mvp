@@ -3,19 +3,20 @@ export type RPE = 6 | 6.5 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10;
 export type SetEntry = {
   id: string;
   setNumber: number;
-  weightKg: number | "";
-  reps: number | "";
-  rpe: RPE | "";
-  intervalSec: number | "";
-  note?: string;
+  weightKg: number | "";       // 重量
+  durationSec: number | "";    // 実施時間（秒）
+  reps: number | "";           // レップ
+  setsCount: number | "";      // 同一内容のセット数（この行が何セット相当か）
+  rpe: RPE | "";               // RPE
+  intervalSec: number | "";    // レスト（秒）
+  note?: string;               // セットメモ
 };
 
 export type ExerciseBlock = {
   id: string;
   name: string;
   variant?: string;
-  /** 種目全体のメモ（ダッシュ系の詳細や補足など） */
-  note?: string;
+  note?: string;               // 種目メモ
   sets: SetEntry[];
 };
 
@@ -26,10 +27,10 @@ export type Session = {
   startTime?: string;        // HH:mm
   endTime?: string;          // HH:mm
   bodyweightKg?: number | "";
-  /** セッション全体の感想・備考 */
-  notes?: string;
+  notes?: string;            // セッション全体の感想・備考
   exercises: ExerciseBlock[];
 };
+
 
 /** 🧩 テンプレート：日付や体重は含めず、種目構成とメモだけを保存 */
 export type Template = {
