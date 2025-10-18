@@ -5,24 +5,28 @@ export type SetEntry = {
   setNumber: number;
   weightKg: number | "";
   reps: number | "";
-  rpe?: RPE | "";
-  intervalSec?: number | ""; // rest after the set
+  rpe: RPE | "";
+  intervalSec: number | "";
   note?: string;
 };
 
 export type ExerciseBlock = {
   id: string;
-  name: string; // e.g., "Back Squat"
-  variant?: string; // e.g., "Low-bar"
+  name: string;
+  variant?: string;
+  /** 種目全体のメモ（ダッシュ系の詳細や補足など） */
+  note?: string;
   sets: SetEntry[];
 };
 
 export type Session = {
   id: string;
-  date: string; // ISO yyyy-mm-dd
-  startTime?: string; // HH:mm
-  endTime?: string;   // HH:mm
+  title?: string;
+  date: string;              // yyyy-mm-dd
+  startTime?: string;        // HH:mm
+  endTime?: string;          // HH:mm
   bodyweightKg?: number | "";
+  /** セッション全体の感想・備考 */
   notes?: string;
   exercises: ExerciseBlock[];
 };
