@@ -1,6 +1,7 @@
+// File: src/pages/LogPage.tsx
 import { useMemo, useState } from "react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import type { Session } from "../types";
+import type { Session, ExerciseBlock } from "../types";
 
 type GroupMode = "month" | "week";
 
@@ -8,6 +9,10 @@ export default function LogPage() {
   const [history, setHistory] = useLocalStorage<Session[]>("trelog/session/history", []);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [mode, setMode] = useState<GroupMode>("month");
+
+  // 🔎 検索状態
+  const [query, setQuery] = useState("");
+  const [onlyWithSets, setOnlyWithSets] = useState(false); // セット記録のあるものだけ
 
   function sessionTotalVolume(s: Session) {
     return s.exercises.reduce(
@@ -22,13 +27,14 @@ export default function LogPage() {
     );
   }
 
+  // --- 週/月キー作成 ---
   function ymKey(date: string | undefined) {
     return (date ?? "").slice(0, 7) || "未設定";
   }
   function ywKey(dateStr: string | undefined) {
     if (!dateStr) return "未設定";
     const d = new Date(dateStr + "T00:00:00");
-    const day = (d.getDay() + 6) % 7;
+    const day = (d.getDay() + 6) % 7; // 月=0 … 日=6
     const monday = new Date(d);
     monday.setDate(d.getDate() - day);
     const year = monday.getFullYear();
@@ -39,10 +45,51 @@ export default function LogPage() {
     return `${year}-W${ww}`;
   }
 
+  // --- 検索対象文字列を作成 ---
+  function normalize(text: unknown) {
+    return (text ?? "").toString().toLowerCase();
+  }
+
+  function matchExercise(ex: ExerciseBlock, q: string) {
+    const hay =
+      normalize(ex.name) +
+      " " +
+      normalize(ex.variant) +
+      " " +
+      normalize(ex.note) +
+      " " +
+      ex.sets.map((s) => normalize(s.note)).join(" ");
+    return hay.includes(q);
+  }
+
+  function matches(session: Session, q: string) {
+    if (!q) return true;
+    const base =
+      normalize(session.title) +
+      " " +
+      normalize(session.notes) +
+      " " +
+      normalize(session.date) +
+      " " +
+      session.exercises.map((ex) => normalize(ex.name) + " " + normalize(ex.variant) + " " + normalize(ex.note)).join(" ");
+    if (base.includes(q)) return true;
+    return session.exercises.some((ex) => matchExercise(ex, q));
+  }
+
+  // --- フィルタを適用 ---
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return history.filter((s) => {
+      if (onlyWithSets && s.exercises.every((ex) => ex.sets.length === 0)) return false;
+      return matches(s, q);
+    });
+  }, [history, query, onlyWithSets]);
+
+  // --- グルーピング（検索後の結果に対して） ---
   const grouped = useMemo(() => {
     const map = new Map<string, Session[]>();
     const keyFn = mode === "month" ? ymKey : ywKey;
-    for (const s of history) {
+    for (const s of filtered) {
       const key = keyFn(s.date);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(s);
@@ -50,13 +97,27 @@ export default function LogPage() {
     return Array.from(map.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
       .map(([k, list]) => [k, list.sort((a, b) => (a.date < b.date ? 1 : -1))] as const);
-  }, [history, mode]);
+  }, [filtered, mode]);
 
   function deleteSession(id: string) {
     if (!confirm("このセッションを削除しますか？")) return;
     setHistory(history.filter((h) => h.id !== id));
     if (expanded === id) setExpanded(null);
   }
+
+  // 🔖 クイックフィルタ（ワンタップでクエリ投入）
+  const quickChips = [
+    "スクワット",
+    "ベンチプレス",
+    "デッドリフト",
+    "ダッシュ",
+    "パワーマックス",
+    "柔道",
+    "チンニング",
+  ];
+
+  const totalCount = history.length;
+  const filteredCount = filtered.length;
 
   return (
     <section className="space-y-4">
@@ -79,8 +140,64 @@ export default function LogPage() {
         </div>
       </div>
 
+      {/* 🔎 検索バー */}
+      <div className="rounded-2xl border bg-white p-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <input
+            className="flex-1 rounded-xl border px-3 py-2"
+            placeholder="タイトル / メモ / 種目名 / バリアント / 種目メモ で検索"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="flex items-center gap-3 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={onlyWithSets}
+                onChange={(e) => setOnlyWithSets(e.target.checked)}
+              />
+              セット記録のあるものだけ
+            </label>
+            <button
+              type="button"
+              className="rounded-xl border px-3 py-2 hover:bg-gray-50"
+              onClick={() => {
+                setQuery("");
+                setOnlyWithSets(false);
+              }}
+            >
+              クリア
+            </button>
+          </div>
+        </div>
+
+        {/* クイックチップ */}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {quickChips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              className="rounded-full border px-3 py-1 text-xs hover:bg-gray-50"
+              onClick={() => setQuery(chip)}
+              title={`「${chip}」で検索`}
+            >
+              #{chip}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-2 text-xs text-gray-600">
+          {filteredCount}/{totalCount} 件
+        </div>
+      </div>
+
       {history.length === 0 && (
         <p className="text-sm text-gray-600">まだ記録がありません。「トレーニング入力」から保存してください。</p>
+      )}
+
+      {history.length > 0 && filteredCount === 0 && (
+        <p className="text-sm text-gray-600">一致する記録が見つかりませんでした。検索条件を調整してください。</p>
       )}
 
       {grouped.map(([groupKey, list]) => (

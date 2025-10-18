@@ -30,3 +30,11 @@ export type Session = {
   notes?: string;
   exercises: ExerciseBlock[];
 };
+
+/** 🧩 テンプレート：日付や体重は含めず、種目構成とメモだけを保存 */
+export type Template = {
+  id: string;
+  name: string;                 // テンプレ表示名
+  notes?: string;               // セッション全体メモの雛形（任意）
+  exercises: ExerciseBlock[];   // 種目・セットの雛形
+};
