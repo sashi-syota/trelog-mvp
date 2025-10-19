@@ -28,7 +28,8 @@ type ImportAnalyze = {
 };
 
 function analyzeImportJson(raw: unknown): ImportAnalyze {
-  const { sessions, templates } = migrateBackup(raw);
+  const { sessions, templates } = migrateBackup(raw as any);
+
 
   const safeSessions = (sessions ?? []).filter(
     (s: any) => typeof s?.id === "string" && typeof s?.date === "string"

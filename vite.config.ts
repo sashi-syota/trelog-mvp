@@ -55,6 +55,10 @@ export default defineConfig({
             }
           }
         ]
+      },
+      // ← 開発中にもSW挙動を確認したいときに便利（不要なら消してOK）
+      devOptions: {
+        enabled: true
       }
     })
   ]

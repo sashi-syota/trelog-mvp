@@ -11,7 +11,8 @@ export type ImportAnalyze = {
 };
 
 export function analyzeImportJson(raw: unknown): ImportAnalyze {
-  const { sessions, templates } = migrateBackup(raw);
+  const { sessions, templates } = migrateBackup(raw as any);
+
 
   // 型ゆるチェック
   const safeSessions = (sessions ?? []).filter(
