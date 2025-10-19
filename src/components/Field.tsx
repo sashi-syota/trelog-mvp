@@ -1,4 +1,5 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
+
 
 export function Label({ htmlFor, children }: { htmlFor?: string; children: ReactNode }) {
   return (

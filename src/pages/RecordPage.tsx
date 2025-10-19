@@ -13,21 +13,23 @@ function uid() {
 }
 
 // 雛形から現在セッションへコピーする際に、新しいIDと連番を振り直す
-function cloneExerciseBlock(b: ExerciseBlock, indexOffset = 0): ExerciseBlock {
+function cloneExerciseBlock(b: ExerciseBlock): ExerciseBlock {
   return {
     id: uid(),
     name: b.name,
     variant: b.variant,
     note: b.note,
     sets: (b.sets ?? []).map((s, i) => ({
-      id: uid(),
-      setNumber: i + 1 + indexOffset,
-      weightKg: s.weightKg,
-      reps: s.reps,
-      rpe: s.rpe,
-      intervalSec: s.intervalSec,
+      id: s.id ?? crypto.randomUUID?.() ?? String(i + 1),
+      setNumber: typeof s.setNumber === "number" ? s.setNumber : i + 1,
+      weightKg: s.weightKg ?? "",
+      reps: s.reps ?? "",
+      rpe: s.rpe ?? "",
+      intervalSec: s.intervalSec ?? "",
+      durationSec: s.durationSec ?? "",              // ★ 追加
+      setsCount: typeof s.setsCount === "number" ? s.setsCount : 1, // ★ 追加（デフォルト1）
       note: s.note ?? "",
-    })),
+    })),    
   };
 }
 
@@ -121,8 +123,8 @@ export default function RecordPage() {
       });
     } else {
       // append: 既存末尾に追加
-      const offset = current.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
-      const appended = tpl.exercises.map((ex) => cloneExerciseBlock(ex, 0));
+      
+      const appended = tpl.exercises.map((ex) => cloneExerciseBlock(ex));
       setCurrent({
         ...current,
         exercises: [...current.exercises, ...appended],
